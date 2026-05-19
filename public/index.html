@@ -4,11 +4,18 @@
     <meta charset="UTF-8">
     <title>Project X Tables</title>
     <link rel="stylesheet" href="style.css">
-    <script src="alert.js"></script>
+    <script src="console.js"></script>
 </head>
 <body>
 
     <div x-include="partials/header.html"></div>
+
+    <div x-data="{ 'id': 205, 'label': 'Red', 'hex': '#b91010' }">
+        <h2>binding dynamically</h2>
+        <ul>
+            <li :id="id" :style="`color: ${hex};`" x-text="label">Loading Node...</li>
+        </ul>
+    </div>
 
     <div x-data="[
         { 'id': 201, 'label': 'Green', 'hex': '#10b981' }
@@ -53,6 +60,17 @@
         </ul>
     </div>
     
+    <div x-data-api="https://jsonplaceholder.typicode.com/users">
+        <h2>Project X Remote Directory (Live API Fetch)</h2>
+        <ul x-for="item in items">
+            <li :id="`user-${item.id}`" style="padding: 6px; border-bottom: 1px solid #eee;">
+                <strong x-text="item.name">Loading name...</strong> 
+                (<span x-text="item.username">username</span>) — 
+                Email: <span x-text="item.email">Loading email...</span>
+            </li>
+        </ul>
+    </div>
+
     <div x-data="[
         { 'id': 201, 'label': 'Green Mainframe', 'hex': '#10b981' },
         { 'id': 202, 'label': 'Blue Cluster', 'hex': '#3b82f6' },

@@ -192,7 +192,11 @@ async fn handle_templates(Path(requested_path): Path<String>) -> impl IntoRespon
                     );
                     let raw_html = String::from_utf8_lossy(&bytes);
                     let processed_html = compile_html(&raw_html);
-                    (StatusCode::OK, headers, processed_html).into_response()
+                    
+                    // FIX: Prepend the modern HTML5 standard declaration string
+                    let standards_compliant_html = format!("<!DOCTYPE html>\n{}", processed_html);
+                    
+                    (StatusCode::OK, headers, standards_compliant_html).into_response()
                 }
                 "txt" => {
                     headers.insert(
