@@ -18,14 +18,18 @@
         { 'id': 203, 'label': 'Indigo', 'premium': true }
     ]">
 
-        <h2>Database Systems</h2>
+        <h2>Expression Evaluator System Matrix</h2>
         <ul x-for="item">
             <li>
                 System ID: <u x-text="item.id">000</u> — Name: <b x-text="item.label">Loading...</b>
-                <span x-if="item.premium" style="color: gold; font-weight: bold; margin-left: 10px;">[⭐ Premium Member]</span>
+                
+                <span x-if="item.id === 202" style="color: #3b82f6; margin-left:10px;">(Target System Matched)</span>
+
+                <span x-if="item.premium !== true" style="color: #ef4444; margin-left:10px;">[⚠️ Security Scan Offline]</span>
+
+                <span x-if="item.id > 201" style="color: #10b981; margin-left:10px;">✔ Forward Node Priority</span>
             </li>
         </ul>
-
     </div>
 
 </body>
