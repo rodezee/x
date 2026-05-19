@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Project X Tables</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; font-family: sans-serif; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f4f4f4; }
+    </style>
+</head>
+<body>
+    <h1>Project X Engine: True Dynamic Templates</h1>
+
+    <div x-data="[
+        { 'id': 201, 'label': 'Green', 'premium': true },
+        { 'id': 202, 'label': 'Blue', 'premium': false },
+        { 'id': 203, 'label': 'Indigo', 'premium': true }
+    ]">
+
+        <h2>Database Systems</h2>
+        <ul x-for="item">
+            <li>
+                System ID: <u x-text="item.id">000</u> — Name: <b x-text="item.label">Loading...</b>
+                <span x-if="item.premium" style="color: gold; font-weight: bold; margin-left: 10px;">[⭐ Premium Member]</span>
+            </li>
+        </ul>
+
+    </div>
+
+</body>
+</html>
