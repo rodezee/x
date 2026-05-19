@@ -31,6 +31,21 @@
             </li>
         </ul>
     </div>
+    
+    <div x-data="[
+        { 'id': 201, 'label': 'Green', 'hex': '#10b981' },
+        { 'id': 202, 'label': 'Blue', 'hex': '#3b82f6' },
+        { 'id': 203, 'label': 'Indigo', 'hex': '#6366f1' }
+    ]">
+
+        <h2>Project X Attribute Binding Engine</h2>
+        <ul x-for="item">
+            <li x-bind:id="item.id" :style="item.hex">
+                System Node Core: <b x-text="item.label">Loading...</b> 
+                (Hex Target Code: <span x-text="item.hex">#000</span>)
+            </li>
+        </ul>
+    </div>
 
 </body>
 </html>

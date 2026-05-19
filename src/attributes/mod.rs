@@ -4,11 +4,13 @@ use tl::HTMLTag;
 pub mod for_loop;
 pub mod text;
 pub mod conditional;
-pub mod expressions; // Register the expressions engine module
+pub mod expressions;
+pub mod bind; // New module
 
 pub use for_loop::ForLoopProcessor;
 pub use text::TextProcessor;
 pub use conditional::ConditionalProcessor;
+pub use bind::BindProcessor; // Export
 
 pub enum ProcessingResult {
     Continue,
