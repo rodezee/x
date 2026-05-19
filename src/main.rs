@@ -10,7 +10,10 @@ use std::{fs, path::PathBuf};
 use tokio::net::TcpListener;
 
 mod attributes;
-use attributes::{AttributeProcessor, ProcessingResult, ForLoopProcessor, TextProcessor, ConditionalProcessor, BindProcessor, bind};
+use attributes::{
+    AttributeProcessor, ProcessingResult, ForLoopProcessor, TextProcessor, 
+    ConditionalProcessor, BindProcessor, IncludeProcessor, bind
+};
 
 pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
     let dom = tl::parse(html, tl::ParserOptions::default()).unwrap();
@@ -18,6 +21,7 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
     let mut compiled_output = String::new();
 
     let processors: Vec<Box<dyn AttributeProcessor>> = vec![
+        Box::new(IncludeProcessor), // Run first so partial code is unpacked before doing logic checks
         Box::new(ConditionalProcessor),
         Box::new(ForLoopProcessor),
         Box::new(TextProcessor),

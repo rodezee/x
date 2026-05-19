@@ -7,6 +7,18 @@
     <script src="alert.js"></script>
 </head>
 <body>
+
+    <div x-include="partials/header.html"></div>
+
+    <div x-data="[
+        { 'id': 201, 'label': 'Green', 'hex': '#10b981' }
+    ]">
+        <h2>Active Mainframes</h2>
+        <ul x-for="item">
+            <li :style="item.hex" x-text="item.label">Loading Node...</li>
+        </ul>
+    </div>
+
     <h1>Project X Engine: True Dynamic Templates</h1>
 
     <div x-data="[
