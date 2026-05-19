@@ -14,29 +14,36 @@
         { 'id': 201, 'label': 'Green', 'hex': '#10b981' }
     ]">
         <h2>Active Mainframes</h2>
-        <ul x-for="item">
-            <li :style="item.hex" x-text="item.label">Loading Node...</li>
+        <ul x-for="item in items">
+            <li :style="`color: ${item.hex};`" x-text="item.label">Loading Node...</li>
         </ul>
     </div>
-
-    <h1>Project X Engine: True Dynamic Templates</h1>
 
     <div x-data="[
         { 'id': 201, 'label': 'Green', 'premium': true },
         { 'id': 202, 'label': 'Blue', 'premium': false },
         { 'id': 203, 'label': 'Indigo', 'premium': true }
     ]">
-
         <h2>Expression Evaluator System Matrix</h2>
-        <ul x-for="item">
+        <ul x-for="item in items">
             <li>
                 System ID: <u x-text="item.id">000</u> — Name: <b x-text="item.label">Loading...</b>
-                
                 <span x-if="item.id === 202" style="color: #3b82f6; margin-left:10px;">(Target System Matched)</span>
-
                 <span x-if="item.premium !== true" style="color: #ef4444; margin-left:10px;">[⚠️ Security Scan Offline]</span>
-
                 <span x-if="item.id > 201" style="color: #10b981; margin-left:10px;">✔ Forward Node Priority</span>
+            </li>
+        </ul>
+    </div>
+
+    <div x-data="[
+        { 'id': 201, 'label': 'Green Mainframe', 'hex': '#10b981' },
+        { 'id': 202, 'label': 'Blue Cluster', 'hex': '#3b82f6' },
+        { 'id': 203, 'label': 'Indigo Node', 'hex': '#6366f1' }
+    ]">
+        <h2>Project X Core Metrics</h2>
+        <ul x-for="item in items">
+            <li :id="`node-system-${item.id}`" :style="`color: ${item.hex}; font-weight: bold; padding: 4px;`">
+                System: <span x-text="item.label">Loading...</span>
             </li>
         </ul>
     </div>
@@ -53,6 +60,37 @@
                 System: <span x-text="item.label">Loading...</span>
             </li>
         </ul>
+    </div>
+    
+    <h3>Looping Over Ranges:</h3>
+    <ul>
+        <div x-for="i in 5">
+            <p>Iterating instance number: <b x-text="i"></b></p>
+        </div>
+    </ul>
+
+    <h3>System Inventory Layout:</h3>
+    <div x-data="[
+        { 'sku': 'PX-101', 'status': 'Active' },
+        { 'sku': 'PX-102', 'status': 'Degraded' },
+        { 'sku': 'PX-103', 'status': 'Offline' }
+    ]">
+        <table>
+            <thead>
+                <tr>
+                    <th>Index</th>
+                    <th>SKU ID</th>
+                    <th>Status Code</th>
+                </tr>
+            </thead>
+            <tbody x-for="(row, step) in items">
+                <tr>
+                    <td x-text="step"></td>
+                    <td x-text="row.sku" style="font-family: monospace;"></td>
+                    <td x-text="row.status"></td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
 </body>

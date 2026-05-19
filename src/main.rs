@@ -1,6 +1,6 @@
 use axum::{
     extract::Path,
-    http::{header, StatusCode, HeaderMap},
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
     Router,
@@ -11,8 +11,8 @@ use tokio::net::TcpListener;
 
 mod attributes;
 use attributes::{
-    AttributeProcessor, ProcessingResult, ForLoopProcessor, TextProcessor, 
-    ConditionalProcessor, BindProcessor, IncludeProcessor, bind
+    bind, AttributeProcessor, BindProcessor, ConditionalProcessor, ForLoopProcessor,
+    IncludeProcessor, ProcessingResult, TextProcessor,
 };
 
 pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
@@ -21,7 +21,7 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
     let mut compiled_output = String::new();
 
     let processors: Vec<Box<dyn AttributeProcessor>> = vec![
-        Box::new(IncludeProcessor), // Run first so partial code is unpacked before doing logic checks
+        Box::new(IncludeProcessor), // Evaluates first to unpack partials before checking conditional logic
         Box::new(ConditionalProcessor),
         Box::new(ForLoopProcessor),
         Box::new(TextProcessor),
@@ -41,7 +41,24 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                     if let Some(Some(x_data_raw)) = attributes.get("x-data") {
                         let normalized = x_data_raw.as_utf8_str().replace('\'', "\"");
                         if let Ok(parsed_json) = serde_json::from_str::<Value>(&normalized) {
-                            scope_stack.push(parsed_json);
+                            match parsed_json {
+                                // SMART WRAPPER: Automatically maps raw top-level JSON arrays 
+                                // to 'items' and 'item' keys for backwards and Alpine-syntax compatibility
+                                Value::Array(arr) => {
+                                    let wrapped_scope = serde_json::json!({
+                                        "items": arr.clone(),
+                                        "item": arr.clone()
+                                    });
+                                    scope_stack.push(wrapped_scope);
+                                }
+                                // Standard objects get pushed straight through unmodified
+                                Value::Object(_) => {
+                                    scope_stack.push(parsed_json);
+                                }
+                                _ => {
+                                    scope_stack.push(parsed_json);
+                                }
+                            }
                             pushed_data_scope = true;
                         }
                     }
@@ -52,16 +69,18 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                     for processor in &processors {
                         let has_attr = attributes.iter().any(|(k, _)| {
                             let k_ref = k.as_ref();
-                            k_ref == processor.name() || 
-                            k_ref.starts_with(&format!("{}:", processor.name())) ||
-                            (processor.name() == "x-bind" && k_ref.starts_with(':'))
+                            k_ref == processor.name()
+                                || k_ref.starts_with(&format!("{}:", processor.name()))
+                                || (processor.name() == "x-bind" && k_ref.starts_with(':'))
                         });
 
                         if has_attr {
-                            let attr_val = attributes.iter()
+                            let attr_val = attributes
+                                .iter()
                                 .find(|(k, _)| {
                                     let k_ref = k.as_ref();
-                                    k_ref.starts_with(processor.name()) || (processor.name() == "x-bind" && k_ref.starts_with(':'))
+                                    k_ref.starts_with(processor.name())
+                                        || (processor.name() == "x-bind" && k_ref.starts_with(':'))
                                 })
                                 .and_then(|(_, v)| v.as_ref().map(|s| s.as_ref().to_string()))
                                 .unwrap_or_default();
@@ -73,7 +92,7 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                                 }
                                 ProcessingResult::OverrideInner(custom_html) => {
                                     inner_content_override = Some(custom_html);
-                                    break; 
+                                    break;
                                 }
                                 ProcessingResult::Continue => {}
                             }
@@ -81,11 +100,17 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                     }
 
                     if skip_tag {
-                        if pushed_data_scope { scope_stack.pop(); }
+                        if pushed_data_scope {
+                            scope_stack.pop();
+                        }
                         continue;
                     }
 
-                    let attrs_str = bind::evaluate_and_bind_attributes(tag, scope_stack, &processor_names_raw);
+                    let attrs_str = bind::evaluate_and_bind_attributes(
+                        tag,
+                        scope_stack,
+                        &processor_names_raw,
+                    );
 
                     let final_inner_content = match inner_content_override {
                         Some(custom_html) => custom_html,
@@ -99,9 +124,14 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                         }
                     };
 
-                    compiled_output.push_str(&format!("<{}{}>{}</{}>", tag_name, attrs_str, final_inner_content, tag_name));
+                    compiled_output.push_str(&format!(
+                        "<{}{}>{}</{}>",
+                        tag_name, attrs_str, final_inner_content, tag_name
+                    ));
 
-                    if pushed_data_scope { scope_stack.pop(); }
+                    if pushed_data_scope {
+                        scope_stack.pop();
+                    }
                 }
                 tl::Node::Raw(raw_text) => {
                     compiled_output.push_str(&raw_text.as_utf8_str());
@@ -113,12 +143,12 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
     compiled_output
 }
 
-fn compile_html(raw_html: &str) -> String {
+pub fn compile_html(raw_html: &str) -> String {
     let mut scope_stack = vec![];
     compile_dom_tree(raw_html, &mut scope_stack)
 }
 
-/// Dynamic File Router supporting template interpretation or binary asset pass-through
+/// Dynamic Router handling static binary pass-throughs or template interpretation on the fly
 async fn handle_templates(Path(requested_path): Path<String>) -> impl IntoResponse {
     let safe_path = requested_path.trim_start_matches('/');
     if safe_path.contains("..") {
@@ -133,23 +163,40 @@ async fn handle_templates(Path(requested_path): Path<String>) -> impl IntoRespon
         target_file.set_extension("html");
     }
 
-    // 1. Read file as raw binary bytes instead of string slices
     match fs::read(target_file.clone()) {
         Ok(bytes) => {
-            let extension = target_file.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+            let extension = target_file
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("");
             let mut headers = HeaderMap::new();
 
-            // 2. Determine Mime Type Content-Types dynamically
             match extension {
                 "html" => {
-                    headers.insert(header::CONTENT_TYPE, "text/html; charset=utf-8".parse().unwrap());
-                    // Convert raw file payload to string only if compiling template directives
+                    headers.insert(
+                        header::CONTENT_TYPE,
+                        "text/html; charset=utf-8".parse().unwrap(),
+                    );
                     let raw_html = String::from_utf8_lossy(&bytes);
                     let processed_html = compile_html(&raw_html);
                     (StatusCode::OK, headers, processed_html).into_response()
                 }
                 "txt" => {
-                    headers.insert(header::CONTENT_TYPE, "text/plain; charset=utf-8".parse().unwrap());
+                    headers.insert(
+                        header::CONTENT_TYPE,
+                        "text/plain; charset=utf-8".parse().unwrap(),
+                    );
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+                "css" => {
+                    headers.insert(header::CONTENT_TYPE, "text/css".parse().unwrap());
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+                "js" => {
+                    headers.insert(
+                        header::CONTENT_TYPE,
+                        "application/javascript".parse().unwrap(),
+                    );
                     (StatusCode::OK, headers, bytes).into_response()
                 }
                 "png" => {
@@ -165,15 +212,22 @@ async fn handle_templates(Path(requested_path): Path<String>) -> impl IntoRespon
                     (StatusCode::OK, headers, bytes).into_response()
                 }
                 _ => {
-                    headers.insert(header::CONTENT_TYPE, "application/octet-stream".parse().unwrap());
+                    headers.insert(
+                        header::CONTENT_TYPE,
+                        "application/octet-stream".parse().unwrap(),
+                    );
                     (StatusCode::OK, headers, bytes).into_response()
                 }
             }
         }
         Err(_) => (
             StatusCode::NOT_FOUND,
-            format!("<h1>404: File Not Found</h1><p>Looked for: {:?}</p>", target_file),
-        ).into_response(),
+            format!(
+                "<h1>404: File Not Found</h1><p>Looked for: {:?}</p>",
+                target_file
+            ),
+        )
+            .into_response(),
     }
 }
 
