@@ -1,6 +1,6 @@
 use serde_json::Value;
 use tl::HTMLTag;
-use super::{AttributeProcessor, ProcessingResult};
+use super::{AttributeProcessor, ProcessingResult, expressions}; // Re-add expressions module safely
 
 pub struct BindProcessor;
 
@@ -20,13 +20,11 @@ impl AttributeProcessor for BindProcessor {
     }
 }
 
-/// Helper to execute binding evaluation values dynamically onto the target element attribute string buffer
 pub fn evaluate_and_bind_attributes(tag: &HTMLTag, scope_stack: &[Value], processors_names: &[&str]) -> String {
     let attributes = tag.attributes();
     let mut attrs_str = String::new();
 
     for (key, val) in attributes.iter() {
-        // FIX: key is already a Cow<str>, so we can just call .as_ref() directly!
         let key_str = key.as_ref();
 
         if key_str.starts_with("x-bind:") || key_str.starts_with(':') {
@@ -38,29 +36,9 @@ pub fn evaluate_and_bind_attributes(tag: &HTMLTag, scope_stack: &[Value], proces
 
             if let Some(v) = val {
                 let expression_expr = v.as_ref();
-                let parts: Vec<&str> = expression_expr.split('.').collect();
-                let (namespace, field_key) = if parts.len() == 2 { (Some(parts[0]), parts[1]) } else { (None, parts[0]) };
-
-                let mut resolved_str = "undefined".to_string();
-                for scope in scope_stack.iter().rev() {
-                    let found_val = if let Some(ns) = namespace {
-                        if let Some(Value::Object(map)) = scope.get(ns) { map.get(field_key) }
-                        else if scope.is_object() && scope.get(field_key).is_some() && ns == "item" { scope.get(field_key) }
-                        else { None }
-                    } else {
-                        scope.get(field_key)
-                    };
-
-                    if let Some(json_val) = found_val {
-                        resolved_str = match json_val {
-                            Value::String(s) => s.clone(),
-                            Value::Number(n) => n.to_string(),
-                            Value::Bool(b) => b.to_string(),
-                            _ => json_val.to_string(),
-                        };
-                        break;
-                    }
-                }
+                
+                // DELEGATION UPGRADE: Run through complex evaluation engine loop cleanly!
+                let resolved_str = expressions::evaluate_complex_string(expression_expr, scope_stack);
 
                 attrs_str.push_str(&format!(" {}='{}'", target_attribute, resolved_str));
             }
@@ -76,4 +54,15 @@ pub fn evaluate_and_bind_attributes(tag: &HTMLTag, scope_stack: &[Value], proces
     }
 
     attrs_str
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::compile_html;
+
+    #[test]
+    fn test_complex_attribute_template_literal_binding() {
+        let template = r#"<div x-data="{ 'id': 707, 'color': '#ef4444' }"><button :id="`btn-${id}`" :style="`color: ${color};`"></button></div>"#;
+        assert_eq!(compile_html(template), "<div><button id='btn-707' style='color: #ef4444;'></button></div>");
+    }
 }

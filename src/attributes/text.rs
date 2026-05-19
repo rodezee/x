@@ -58,3 +58,14 @@ fn format_json_value(value: &Value) -> String {
         _ => value.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::compile_html;
+
+    #[test]
+    fn test_variable_interpolation_and_scoping() {
+        let template = r#"<div x-data="{ 'user': 'Alex' }"><span x-text="user">Loading</span></div>"#;
+        assert_eq!(compile_html(template), "<div><span>Alex</span></div>");
+    }
+}

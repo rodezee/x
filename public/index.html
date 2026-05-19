@@ -42,16 +42,15 @@
     </div>
     
     <div x-data="[
-        { 'id': 201, 'label': 'Green', 'style': 'color: #10b981', 'hex': '#10b981' },
-        { 'id': 202, 'label': 'Blue', 'style': 'color: #3b82f6', 'hex': '#3b82f6' },
-        { 'id': 203, 'label': 'Indigo', 'style': 'color: #6366f1', 'hex': '#6366f1' }
+        { 'id': 201, 'label': 'Green Mainframe', 'hex': '#10b981' },
+        { 'id': 202, 'label': 'Blue Cluster', 'hex': '#3b82f6' },
+        { 'id': 203, 'label': 'Indigo Node', 'hex': '#6366f1' }
     ]">
 
-        <h2>Project X Attribute Binding Engine</h2>
+        <h2>Project X Core Metrics</h2>
         <ul x-for="item">
-            <li x-bind:id="item.id" :style="item.style">
-                System Node Core: <b x-text="item.label">Loading...</b> 
-                (Hex Target Code: <span x-text="item.hex">#000</span>)
+            <li :id="`node-system-${item.id}`" :style="`color: ${item.hex}; font-weight: bold; padding: 4px;`">
+                System: <span x-text="item.label">Loading...</span>
             </li>
         </ul>
     </div>

@@ -55,3 +55,14 @@ impl AttributeProcessor for ForLoopProcessor {
         ProcessingResult::OverrideInner(loop_output)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::compile_html;
+
+    #[test]
+    fn test_loop_iteration_unrolling() {
+        let template = r#"<div x-data="[{'name':'A'}, {'name':'B'}]"><ul x-for="item"><li x-text="item.name">Tmp</li></ul></div>"#;
+        assert_eq!(compile_html(template), "<div><ul><li>A</li><li>B</li></ul></div>");
+    }
+}

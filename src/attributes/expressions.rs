@@ -4,13 +4,11 @@ use serde_json::Value;
 pub fn evaluate_expression(expr: &str, scope_stack: &[Value]) -> bool {
     let expr = expr.trim();
 
-    // Support simple logical inversion prefix (e.g., "!item.premium")
     if expr.starts_with('!') {
         let sub_expr = &expr[1..];
         return !evaluate_truthiness(sub_expr, scope_stack);
     }
 
-    // Order operators by length to prevent partial matching (e.g., matching '=' inside '===')
     let operators = ["===", "!==", "==", "!=", "<=", ">=", "<", ">"];
     
     for op in operators.iter() {
@@ -33,31 +31,72 @@ pub fn evaluate_expression(expr: &str, scope_stack: &[Value]) -> bool {
         }
     }
 
-    // If no binary operator was found, fallback to checking raw truthiness of the variable
     evaluate_truthiness(expr, scope_stack)
 }
 
-/// Helper to deeply look up variables or parse raw string/number literals
-fn resolve_value(token: &str, scope_stack: &[Value]) -> Value {
-    // 1. Check if token is a string literal wrapped in single quotes
+/// NEW: Evaluates complex mixed strings (e.g., "`color: ${item.hex}; font-size: 14px;`")
+pub fn evaluate_complex_string(expr: &str, scope_stack: &[Value]) -> String {
+    let expr = expr.trim();
+
+    // Check for JavaScript-style backtick template literal formatting: `text ${var}`
+    if expr.starts_with('`') && expr.ends_with('`') {
+        let mut result = String::new();
+        let content = &expr[1..expr.len() - 1];
+        let mut current_pos = 0;
+
+        while let Some(start_idx) = content[current_pos..].find("${") {
+            let absolute_start = current_pos + start_idx;
+            // Push literal text leading up to the token variable
+            result.push_str(&content[current_pos..absolute_start]);
+
+            if let Some(end_idx) = content[absolute_start..].find('}') {
+                let absolute_end = absolute_start + end_idx;
+                let var_token = content[absolute_start + 2..absolute_end].trim();
+                
+                // Resolve the token variable from our environment stack
+                let resolved = resolve_value(var_token, scope_stack);
+                let resolved_str = match resolved {
+                    Value::String(s) => s,
+                    Value::Number(n) => n.to_string(),
+                    Value::Bool(b) => b.to_string(),
+                    _ => String::new(),
+                };
+                
+                result.push_str(&resolved_str);
+                current_pos = absolute_end + 1;
+            } else {
+                break;
+            }
+        }
+        
+        // Push any remaining trailing text
+        result.push_str(&content[current_pos..]);
+        return result;
+    }
+
+    // Fallback to checking normal variable lookup
+    let resolved = resolve_value(expr, scope_stack);
+    match resolved {
+        Value::String(s) => s,
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "undefined".to_string(),
+        _ => resolved.to_string(),
+    }
+}
+
+pub fn resolve_value(token: &str, scope_stack: &[Value]) -> Value {
+    let token = token.trim();
     if token.starts_with('\'') && token.ends_with('\'') {
         return Value::String(token[1..token.len() - 1].to_string());
     }
 
-    // 2. Check if token is a numeric literal
-    if let Ok(num) = token.parse::<i64>() {
-        return Value::from(num);
-    }
-    if let Ok(num) = token.parse::<f64>() {
-        return Value::from(num);
-    }
-
-    // 3. Check for keywords
+    if let Ok(num) = token.parse::<i64>() { return Value::from(num); }
+    if let Ok(num) = token.parse::<f64>() { return Value::from(num); }
     if token == "true" { return Value::Bool(true); }
     if token == "false" { return Value::Bool(false); }
     if token == "null" { return Value::Null; }
 
-    // 4. Otherwise, handle variable resolution across stack contexts
     let parts: Vec<&str> = token.split('.').collect();
     let (namespace, field_key) = if parts.len() == 2 {
         (Some(parts[0]), parts[1])
@@ -67,13 +106,9 @@ fn resolve_value(token: &str, scope_stack: &[Value]) -> Value {
 
     for scope in scope_stack.iter().rev() {
         let value = if let Some(ns) = namespace {
-            if let Some(Value::Object(map)) = scope.get(ns) {
-                map.get(field_key)
-            } else if scope.is_object() && scope.get(field_key).is_some() && ns == "item" {
-                scope.get(field_key)
-            } else {
-                None
-            }
+            if let Some(Value::Object(map)) = scope.get(ns) { map.get(field_key) }
+            else if scope.is_object() && scope.get(field_key).is_some() && ns == "item" { scope.get(field_key) }
+            else { None }
         } else {
             scope.get(field_key)
         };
