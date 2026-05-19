@@ -1,3 +1,6 @@
+mod data;
+use data::DataManager;
+
 use axum::{
     extract::Path,
     http::{header, HeaderMap, StatusCode},
@@ -14,6 +17,21 @@ use attributes::{
     bind, AttributeProcessor, BindProcessor, ConditionalProcessor, ForLoopProcessor,
     IncludeProcessor, ProcessingResult, TextProcessor,
 };
+
+fn push_smart_scope(parsed_json: Value, scope_stack: &mut Vec<Value>) {
+    match parsed_json {
+        Value::Array(arr) => {
+            let wrapped_scope = serde_json::json!({
+                "items": arr.clone(),
+                "item": arr.clone()
+            });
+            scope_stack.push(wrapped_scope);
+        }
+        _ => {
+            scope_stack.push(parsed_json);
+        }
+    }
+}
 
 pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
     let dom = tl::parse(html, tl::ParserOptions::default()).unwrap();
@@ -38,30 +56,25 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                     let attributes = tag.attributes();
                     let mut pushed_data_scope = false;
 
-                    if let Some(Some(x_data_raw)) = attributes.get("x-data") {
+                    // -----------------------------------------------------------------
+                    // PLACE THE PLUGGABLE REGISTRY ENGINE RIGHT HERE:
+                    // -----------------------------------------------------------------
+                    let data_manager = DataManager::new();
+
+                    // 1. Check for pluggable data attributes (x-data-file, x-data-mysql, etc.)
+                    if let Some(parsed_json) = data_manager.extract_scope(attributes) {
+                        push_smart_scope(parsed_json, scope_stack);
+                        pushed_data_scope = true;
+                    } 
+                    // 2. Fallback to classic inline data if no file/database provider matched
+                    else if let Some(Some(x_data_raw)) = attributes.get("x-data") {
                         let normalized = x_data_raw.as_utf8_str().replace('\'', "\"");
                         if let Ok(parsed_json) = serde_json::from_str::<Value>(&normalized) {
-                            match parsed_json {
-                                // SMART WRAPPER: Automatically maps raw top-level JSON arrays 
-                                // to 'items' and 'item' keys for backwards and Alpine-syntax compatibility
-                                Value::Array(arr) => {
-                                    let wrapped_scope = serde_json::json!({
-                                        "items": arr.clone(),
-                                        "item": arr.clone()
-                                    });
-                                    scope_stack.push(wrapped_scope);
-                                }
-                                // Standard objects get pushed straight through unmodified
-                                Value::Object(_) => {
-                                    scope_stack.push(parsed_json);
-                                }
-                                _ => {
-                                    scope_stack.push(parsed_json);
-                                }
-                            }
+                            push_smart_scope(parsed_json, scope_stack);
                             pushed_data_scope = true;
                         }
                     }
+                    // -----------------------------------------------------------------
 
                     let mut inner_content_override = None;
                     let mut skip_tag = false;
