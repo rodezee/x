@@ -1,6 +1,12 @@
-use axum::{response::Html, routing::get, Router};
+use axum::{
+    extract::Path,
+    http::{header, StatusCode, HeaderMap},
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
 use serde_json::Value;
-use std::fs;
+use std::{fs, path::PathBuf};
 use tokio::net::TcpListener;
 
 mod attributes;
@@ -40,7 +46,6 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                     let mut skip_tag = false;
 
                     for processor in &processors {
-                        // FIX: Use k.as_ref() directly here
                         let has_attr = attributes.iter().any(|(k, _)| {
                             let k_ref = k.as_ref();
                             k_ref == processor.name() || 
@@ -49,7 +54,6 @@ pub fn compile_dom_tree(html: &str, scope_stack: &mut Vec<Value>) -> String {
                         });
 
                         if has_attr {
-                            // FIX: Use k.as_ref() directly here too
                             let attr_val = attributes.iter()
                                 .find(|(k, _)| {
                                     let k_ref = k.as_ref();
@@ -110,18 +114,76 @@ fn compile_html(raw_html: &str) -> String {
     compile_dom_tree(raw_html, &mut scope_stack)
 }
 
-async fn handle_index() -> Html<String> {
-    let raw_html = fs::read_to_string("index.html")
-        .unwrap_or_else(|_| "<h1>500: index.html missing</h1>".to_string());
-    
-    let processed_html = compile_html(&raw_html);
-    Html(processed_html)
+/// Dynamic File Router supporting template interpretation or binary asset pass-through
+async fn handle_templates(Path(requested_path): Path<String>) -> impl IntoResponse {
+    let safe_path = requested_path.trim_start_matches('/');
+    if safe_path.contains("..") {
+        return (StatusCode::BAD_REQUEST, "400: Bad Request").into_response();
+    }
+
+    let mut target_file = PathBuf::from("public").join(safe_path);
+
+    if target_file.is_dir() || safe_path.is_empty() {
+        target_file = target_file.join("index.html");
+    } else if target_file.extension().is_none() {
+        target_file.set_extension("html");
+    }
+
+    // 1. Read file as raw binary bytes instead of string slices
+    match fs::read(target_file.clone()) {
+        Ok(bytes) => {
+            let extension = target_file.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+            let mut headers = HeaderMap::new();
+
+            // 2. Determine Mime Type Content-Types dynamically
+            match extension {
+                "html" => {
+                    headers.insert(header::CONTENT_TYPE, "text/html; charset=utf-8".parse().unwrap());
+                    // Convert raw file payload to string only if compiling template directives
+                    let raw_html = String::from_utf8_lossy(&bytes);
+                    let processed_html = compile_html(&raw_html);
+                    (StatusCode::OK, headers, processed_html).into_response()
+                }
+                "txt" => {
+                    headers.insert(header::CONTENT_TYPE, "text/plain; charset=utf-8".parse().unwrap());
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+                "png" => {
+                    headers.insert(header::CONTENT_TYPE, "image/png".parse().unwrap());
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+                "jpg" | "jpeg" => {
+                    headers.insert(header::CONTENT_TYPE, "image/jpeg".parse().unwrap());
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+                "svg" => {
+                    headers.insert(header::CONTENT_TYPE, "image/svg+xml".parse().unwrap());
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+                _ => {
+                    headers.insert(header::CONTENT_TYPE, "application/octet-stream".parse().unwrap());
+                    (StatusCode::OK, headers, bytes).into_response()
+                }
+            }
+        }
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            format!("<h1>404: File Not Found</h1><p>Looked for: {:?}</p>", target_file),
+        ).into_response(),
+    }
+}
+
+async fn handle_root() -> impl IntoResponse {
+    handle_templates(Path(String::new())).await
 }
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/", get(handle_index));
+    let app = Router::new()
+        .route("/", get(handle_root))
+        .route("/*path", get(handle_templates));
+
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
-    println!("🚀 Project X Scope Engine running on http://localhost:3000");
+    println!("🚀 Project X Server-Side Template Matrix active on http://localhost:3000");
     axum::serve(listener, app).await.unwrap();
 }

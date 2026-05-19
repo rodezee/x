@@ -1,0 +1,5 @@
+[
+    { 'id': 201, 'label': 'Green', 'style': 'color: #10b981', 'hex': '#10b981' },
+    { 'id': 202, 'label': 'Blue', 'style': 'color: #3b82f6', 'hex': '#3b82f6' },
+    { 'id': 203, 'label': 'Indigo', 'style': 'color: #6366f1', 'hex': '#6366f1' }
+]
